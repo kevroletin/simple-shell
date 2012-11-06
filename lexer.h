@@ -77,10 +77,10 @@ public:
             c = m_in.get();
             Log("got " << c);
 
-            if (m_in.eof()) continue;
-
-            if (m_state == EWasPara) {
-                assert(0);
+            if (m_in.eof()) {
+                Log("got EOF");
+            } else if (m_state == EWasPara) {
+                assert(0); // TODO
             } else {
                 if (m_state == EWasBackSlash) {
                     m_str += c;
