@@ -1,6 +1,8 @@
 #include "parser.h"
 #include <unistd.h>
 #include <wait.h>
+#include <stdlib.h>
+
 
 #undef Log
 #undef Warn
@@ -17,35 +19,89 @@
 #  define Error(str)
 #endif
 
+//#define DEBUG_FORK
+#ifdef DEBUG_FORK
+#  define ForkLog(str) std::cerr << getpid() << " " << str << "\n";
+#  define ForkWarn(str) std::cerr << getpid() << " [warn] " << str << "\n";
+#  define ForkError(str) std::cerr << getpid() << " [err] " << str << "\n";
+#else
+#  define ForkLog(str)
+#  define ForkWarn(str)
+#  define ForkError(str)
+#endif
 
 struct CTaskRunner {
     CTaskRunner(CStmtPipeline pipeline, CVarTable& table) {
         Log("execute " << pipeline);
-        char **env =  table.BuildExportTable();
-        char **argv;
-        {
-            int len = pipeline.m_stmts[0]->m_params.size() + 1;
-            argv = new char*[len];
-            for (int i = 0; i < len - 1; ++i) {
-                argv[i] = new char[pipeline.m_stmts[0]->m_params[i].size() + 1];
-                strcpy(argv[i], pipeline.m_stmts[0]->m_params[i].c_str());
-            }
-            argv[len - 1] = NULL;
-        }
 
-        int pid = fork();
-        if (pid == -1) {
-            throw std::string("error with fork");
-        } if (0 == pid) {
-            execve(pipeline.m_stmts[0]->m_params[0].c_str(), argv, env);
-        } else {
+        int pipefd[2];
+        int &pipeWr = pipefd[1];
+        int &pipeRd = pipefd[0];
+        int lastPipeRd = -1;
+
+        for (int i = 0; i < pipeline.m_stmts.size(); ++i) {
+            bool firstTime = i == 0;
+            bool lastTime  = i == pipeline.m_stmts.size() - 1;
+            if (!lastTime) {
+                if (-1 == pipe(pipefd)) {
+                    throw std::string("error with pipe");
+                }
+                ForkLog("pipe " << pipeWr << " -> " << pipeRd);
+            }
+            
+            char **env =  table.BuildExportTable();
+            char **argv = pipeline.m_stmts[i]->BuildArgv();
+            
+            int pid = fork();
+            if (-1 == pid) {
+                // TODO: free memory
+                throw std::string("error with fork");
+            }
+            if (0 == pid) {
+                if (!lastTime) {
+                    ForkLog("close " << pipeRd);
+                    close(pipeRd);
+
+                    ForkLog("stout = " << pipeWr);
+                    if (-1 == dup2(pipeWr, STDOUT_FILENO)) {
+                        // TODO: close filehandles, free memory
+                        throw std::string("can't dup to stdout");
+                    }
+
+                    ForkLog("close " << pipeWr);
+                    close(pipeWr);
+                }
+                if (!firstTime) {
+                    ForkLog("stdin = " << lastPipeRd);
+                    if (-1 == dup2(lastPipeRd, STDIN_FILENO)) {
+                        throw std::string("can't dup to stdin");
+                    }
+                    ForkLog("close " << lastPipeRd);
+                    close(lastPipeRd);
+                }
+                ForkLog("exec " << pipeline.m_stmts[i]->m_params[0]);
+                execvpe(pipeline.m_stmts[i]->m_params[0].c_str(), argv, env);
+                std::cerr <<  "can not execute: " + pipeline.m_stmts[0]->m_params[0] << "\n";
+                exit(EXIT_FAILURE);
+            }
+            ForkLog("forked: " << pid);
+            
+            if (!firstTime) {
+                ForkLog("close " << lastPipeRd);
+                close(lastPipeRd);
+            }
+            lastPipeRd = pipeRd;
+            if (!lastTime) {
+                ForkLog("close " << pipeWr);
+                close(pipeWr);
+            }
+
             for (int i = 0; NULL != env[i]; i++) delete env[i];
             delete env;
             for (int i = 0; NULL != argv[i]; i++) delete argv[i];
             delete argv;
-
-            if (pipeline.m_wait) waitpid(pid, NULL, 0);
         }
+        if (pipeline.m_wait) waitpid(P_ALL, NULL, 0);
     }
 };
 
@@ -65,13 +121,13 @@ public:
 protected:
     void ReadEnv() {
 	for (int i = 0; NULL != environ[i]; i++) {
-//            Log(environ[i]);
             m_table.Set(environ[i], true);
 	}        
     }
-
     void Run(std::istream& in) {
         while (in.good()) {
+            std::cerr << "$ ";
+
             std::string str;
             getline(in, str);
             std::stringstream ss;
@@ -92,7 +148,6 @@ protected:
             }
         }
     }
-
     void EvaluateSpecial(CStmtPipeline& pipeline) {
         CStmtExecute* stmt = pipeline.m_stmts[0];
         std::string cmd = stmt->m_params[0];
@@ -119,44 +174,7 @@ protected:
 
 int main(int argc, char* argv[], char* env[])
 {
-    if (1) {
-        CExecutor e;
-        return 0;
-    }
-    
-    {
-        std::ifstream fin;
-        fin.open("input.txt");
-        std::cerr << "=== Tokens ===\n";
-        CVarTable table;
-        table.Set("var", "value");
-        CLexer lex(fin, table);
-        IToken* tok = NULL;
-        do {
-            bool b;
-            tok = lex.GetToken(b);
-            if (tok != NULL ) std::cerr << *tok << "\n";
-            else std::cerr << "[NULL]";
-        } while (tok != NULL);
-        fin.close();
-        return 0;
-    }
-    {
-        std::ifstream fin;
-        fin.open("input.txt");
-        std::cerr << "\n=== Statements ===\n";
-        CVarTable table;
-        CLexer lex(fin, table);
-        CParser parser;
-        try {
-            CStmtPipeline res = parser.ParseLine(lex);
-            std::cerr << res;
-        }
-        catch (std::string str) {
-            std::cerr << str << "\n";
-        }
-        fin.close();
-    }    
+    CExecutor e;
     return 0;
 }
 

@@ -55,6 +55,16 @@ struct CStmtExecute: public IStatement {
         }
         out << ")\n";
     };
+    char** BuildArgv() {
+        int len = m_params.size() + 1;
+        char** argv = new char*[len];
+        for (int i = 0; i < len - 1; ++i) {
+            argv[i] = new char[m_params[i].size() + 1];
+            strcpy(argv[i], m_params[i].c_str());
+        }
+        argv[len - 1] = NULL;
+        return argv;
+    }
 };
 
 struct CStmtPipeline: public IStatement {
