@@ -1,0 +1,13 @@
+;; Object lexer
+;; EDE Project Files are auto generated: Do Not Edit
+(ede-proj-project "lexer"
+  :file "Project.ede"
+  :name "lexer"
+  :targets (list 
+   (ede-proj-target-makefile-program "lexer.out"
+    :name "lexer.out"
+    :path ""
+    :source '("main.cpp")
+    )
+   )
+  )

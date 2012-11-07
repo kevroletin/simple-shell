@@ -1,11 +1,17 @@
 #ifndef _LEXER_H
 #define _LEXER_H
 
+#include "vartable.h"
 #include <iostream>
 #include <sstream>
 #include <map>
 #include <set>
 #include <assert.h>
+#include <cstring>
+
+#undef Log
+#undef Warn
+#undef Error
 
 //#define DEBUG_LEXER
 #ifdef DEBUG_LEXER
@@ -17,24 +23,6 @@
 #  define Warn(str)
 #  define Error(str)
 #endif
-
-struct CVar {
-    CVar() {}
-    CVar(const std::string name, const std::string value, bool exported = false): m_name(name), m_value(value), m_exported(exported) {}
-    std::string m_name;
-    std::string m_value;
-    bool m_exported;
-};
-
-bool operator<<(const CVar& a, const CVar& b) { return a.m_name < b.m_name; }
-
-class CVarTable {
-public:
-    std::string GetValue(std::string variableName) const { return ""; /* TODO */ }
-    char* BuildExportTable() const;
-private:
-    std::set<CVar> m_data;
-};
 
 enum EToken { EString, EPipe, ENoWait };
 std::string tokToStr[] = { "EString", "EPipe", "ENoWait" };
@@ -111,7 +99,11 @@ public:
                 } else if (c == '$') {
                     m_state = EWasVar;
                 } else {
-                    m_str += c;
+                    if (EWasVar == m_state) {
+                        m_var += c;
+                    } else {
+                        m_str += c;
+                    }
                 }
             }
         }
@@ -137,7 +129,9 @@ protected:
     };
     void FinishVar() {
         if (m_var != "") {
-            m_str += m_varTable.GetValue(m_var);
+            std::string newVal = m_varTable.GetValue(m_var);
+            Log("var finished: " << m_var << " -> " << newVal);
+            m_str += newVal;
             m_var = "";
         }
     }
@@ -149,7 +143,7 @@ protected:
 
         assert(NULL == m_res);
         m_res = new CTokString(m_str);
-        Log("m_res Assigned");
+        Log("str finished, m_res Assigned");
         m_str = "";
         return false;
     }

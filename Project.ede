@@ -1,0 +1,29 @@
+;; Object shell
+;; EDE Project Files are auto generated: Do Not Edit
+(ede-proj-project "shell"
+  :file "Project.ede"
+  :name "shell"
+  :targets (list 
+   (ede-proj-target-makefile-program "main.out"
+    :name "main.out"
+    :path ""
+    :source '("main.cpp")
+    :auxsource '("lexer.h" "parser.h" "vartable.h")
+    )
+   (ede-proj-target-makefile-program "child.out"
+    :name "child.out"
+    :path ""
+    :source '("child.cpp")
+    )
+   (ede-proj-target-makefile-program "pipe.out"
+    :name "pipe.out"
+    :path ""
+    :source '("pipe.cpp")
+    )
+   (ede-proj-target-makefile-program "fork.out"
+    :name "fork.out"
+    :path ""
+    :source '("fork.cpp")
+    )
+   )
+  )
