@@ -101,17 +101,19 @@ struct CTaskRunner {
             for (int i = 0; NULL != argv[i]; i++) delete argv[i];
             delete argv;
         }
-        if (pipeline.m_wait) waitpid(P_ALL, NULL, 0);
+        if (pipeline.m_wait) {
+            while (-1 != wait(NULL)) {}
+        }
     }
 };
 
 class CExecutor {
 public:
-    CExecutor() { 
+    CExecutor(): m_batchMode(false) { 
         ReadEnv();
         Run(std::cin);
     }
-    CExecutor(std::string filename) {
+    CExecutor(std::string filename): m_batchMode(true) {
         std::ifstream fin;
         fin.open(filename.c_str());
         ReadEnv();
@@ -126,7 +128,7 @@ protected:
     }
     void Run(std::istream& in) {
         while (in.good()) {
-            std::cerr << "$ ";
+            if (!m_batchMode) std::cerr << "$ ";
 
             std::string str;
             getline(in, str);
@@ -170,11 +172,18 @@ protected:
     }
     
     CVarTable m_table;
+    bool m_batchMode;
 };
 
 int main(int argc, char* argv[], char* env[])
 {
-    CExecutor e;
+    if (argc == 1) {
+        CExecutor e;
+    } else {
+        for (int i = 1; i < argc; ++i) {
+            CExecutor e(argv[i]);
+        }
+    }
     return 0;
 }
 

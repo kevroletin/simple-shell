@@ -1,0 +1,4 @@
+set a 1
+set b 2
+set c 3
+echo -n hello world | perl -ne "print(\$_,'$a')" | perl -ne "print(\$_,'$b')" | perl -ne "print(\$_,'$c')"

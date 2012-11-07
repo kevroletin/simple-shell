@@ -97,10 +97,17 @@ public:
                     FinishVar();
                     "" == m_str ? EWasSpace : EWasLetter;
                 } else if (c == '$') {
+                    FinishVar();
                     m_state = EWasVar;
                 } else {
                     if (EWasVar == m_state) {
-                        m_var += c;
+                        if (isalpha(c)) {
+                            m_var += c;
+                        } else {
+                            FinishVar();
+                            m_str += c;
+                            m_state = EWasLetter;
+                        }
                     } else {
                         m_str += c;
                     }
