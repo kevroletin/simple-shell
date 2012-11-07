@@ -44,7 +44,7 @@ struct CTaskRunner {
             for (int i = 0; NULL != argv[i]; i++) delete argv[i];
             delete argv;
 
-            waitpid(pid, NULL, 0);
+            if (pipeline.m_wait) waitpid(pid, NULL, 0);
         }
     }
 };
