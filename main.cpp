@@ -11,23 +11,15 @@
 //#define DEBUG_EXECUTOR
 #ifdef DEBUG_EXECUTOR
 #  define Log(str) std::cerr << str << "\n";
-#  define Warn(str) std::cerr << "[warn] " << str << "\n";
-#  define Error(str) std::cerr << "[err] " << str << "\n";
 #else
 #  define Log(str)
-#  define Warn(str)
-#  define Error(str)
 #endif
 
 //#define DEBUG_FORK
 #ifdef DEBUG_FORK
 #  define ForkLog(str) std::cerr << getpid() << " " << str << "\n";
-#  define ForkWarn(str) std::cerr << getpid() << " [warn] " << str << "\n";
-#  define ForkError(str) std::cerr << getpid() << " [err] " << str << "\n";
 #else
 #  define ForkLog(str)
-#  define ForkWarn(str)
-#  define ForkError(str)
 #endif
 
 struct CTaskRunner {
@@ -55,7 +47,6 @@ struct CTaskRunner {
             
             int pid = fork();
             if (-1 == pid) {
-                // TODO: free memory
                 throw std::string("error with fork");
             }
             if (0 == pid) {
@@ -65,7 +56,6 @@ struct CTaskRunner {
 
                     ForkLog("stout = " << pipeWr);
                     if (-1 == dup2(pipeWr, STDOUT_FILENO)) {
-                        // TODO: close filehandles, free memory
                         throw std::string("can't dup to stdout");
                     }
 
@@ -142,12 +132,20 @@ protected:
             CLexer lex(ss, m_table);
             CParser parser;
             try {
-                CStmtPipeline res = parser.ParseLine(lex);
-                if (res.m_special) {
-                    EvaluateSpecial(res);
-                } else {
-                    EvaluatePipeline(res);
+                CPipesBatch* batch = parser.ParseLine(lex);
+                for (std::vector<CStmtPipeline*>::iterator it = batch->m_pipes.begin(); it != batch->m_pipes.end(); ++it) {
+                    try {
+                        if ((*it)->m_special) {
+                            EvaluateSpecial(**it);
+                        } else {
+                            EvaluatePipeline(**it);
+                        }
+                    }
+                    catch (std::string str) {
+                        std::cerr << str << "\n";
+                    }
                 }
+                delete batch;
             }
             catch (std::string str) {
                 std::cerr << str << "\n";

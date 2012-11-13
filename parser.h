@@ -24,8 +24,8 @@
 
 typedef unsigned uint;
 
-enum EStatement { EStmtPipeline, EStmtExecute };
-std::string statementToStr[] = { "EStmtPipeline", "EStmtExecute" };
+enum EStatement { EPipesBatch, EStmtPipeline, EStmtExecute };
+std::string statementToStr[] = { "EPipesBatch", "EStmtPipeline", "EStmtExecute" };
 
 void PrintSpaces(std::ostream& out, uint offset) {
     while (offset--) out << ' ';
@@ -82,16 +82,27 @@ struct CStmtPipeline: public IStatement {
     };
 };
 
+struct CPipesBatch: public IStatement {
+    std::vector<CStmtPipeline*> m_pipes;
+    virtual EStatement GetStatementType() { return EStmtPipeline; }
+    virtual void Dump(std::ostream& out, uint offset) {
+        PrintSpaces(out, offset);
+        out << statementToStr[GetStatementType()] << "\n";
+        for (std::vector<CStmtPipeline*>::iterator it = m_pipes.begin(); it != m_pipes.end(); ++it) {
+            (*it)->Dump(out, offset + 2);
+        }
+    };
+};
+
 class CParser {
 public:
-    CStmtPipeline ParseLine(CLexer& lex) {
-        bool b;
-        CStmtPipeline res;
+    CPipesBatch* ParseLine(CLexer& lex) {
+    bool b;
+        CPipesBatch* batch = new CPipesBatch;
+        CStmtPipeline* pipe = NULL;
         CStmtExecute* exec = NULL;
         IToken* tok;
         m_state = EClear;
-        // TODO: memory managment :)
-        // TODO: reduce repeated code amount
         while (NULL != (tok = lex.GetToken(b))) {
             Log("got " << *tok);
             EToken ttype = tok->GetTokenType();
@@ -100,6 +111,8 @@ public:
                 throw(std::string("unexpected input after special command"));
             } break;
             case EClear:
+                Log("Create pipe " << pipe);
+                pipe = new CStmtPipeline;
             case EWasPipe: {
                 CheckTok(tok, EString);
                 Log("Create from " << *tok);
@@ -113,7 +126,7 @@ public:
                         exec->m_params.push_back( static_cast<CTokString*>(tok)->m_data );
                         m_state = EWasSpecialCmd;
                     }
-                    res.m_special = true;
+                    pipe->m_special = true;
                 } else if ("set" == data) {
                     if (NULL != (tok = lex.GetToken(b))) {
                         CheckTok(tok, EString);
@@ -128,10 +141,10 @@ public:
                         exec->m_params.push_back("");
                     }
                     m_state = EWasSpecialCmd;
-                    res.m_special = true;
+                    pipe->m_special = true;
                 } else if ("dump" == data) {
                     m_state = EWasSpecialCmd;
-                    res.m_special = true;
+                    pipe->m_special = true;
                 } else {
                     m_state = EWasStr;
                 }
@@ -144,15 +157,17 @@ public:
                     exec->m_params.push_back( static_cast<CTokString*>(tok)->m_data );
                 } else if (EPipe == ttype) {
                     Log("Push " << *exec);
-                    res.m_stmts.push_back(exec);
+                    pipe->m_stmts.push_back(exec);
                     exec = NULL;
                     m_state = EWasPipe;
                 } else if (ENoWait == ttype) {
                     Log("Push " << *exec);
-                    res.m_stmts.push_back(exec);
+                    pipe->m_stmts.push_back(exec);
                     exec = NULL;
-                    m_state = EWasNoWait;
-                    res.m_wait = false;
+                    m_state = EClear;
+                    pipe->m_wait = false;
+                    batch->m_pipes.push_back(pipe);
+                    pipe = NULL;
                 }
             } break;
             default: assert(0);
@@ -161,12 +176,17 @@ public:
         if (NULL != exec) {
             if (0 == exec->m_params.size()) {
                 delete exec;
-            } else {
-                res.m_stmts.push_back(exec);
+            } else if (pipe != NULL) {
+                pipe->m_stmts.push_back(exec);
                 exec = NULL;
             }
         }
-        return res;
+        if (NULL != pipe ) {
+            batch->m_pipes.push_back(pipe);
+            pipe = NULL;
+        }
+        Log("Result=" << batch);
+        return batch;
     }
     void CheckTok(IToken* tok, EToken requestedType) {
         if (tok->GetTokenType() != requestedType) {
