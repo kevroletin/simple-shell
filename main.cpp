@@ -34,6 +34,7 @@ struct CTaskRunner {
     CTaskRunner(CStmtPipeline pipeline, CVarTable& table) {
         Log("execute " << pipeline);
 
+        std::vector<int> childs;
         int pipefd[2];
         int &pipeWr = pipefd[1];
         int &pipeRd = pipefd[0];
@@ -84,6 +85,7 @@ struct CTaskRunner {
                 std::cerr <<  "can not execute: " + pipeline.m_stmts[0]->m_params[0] << "\n";
                 exit(EXIT_FAILURE);
             }
+            childs.push_back(pid);
             ForkLog("forked: " << pid);
             
             if (!firstTime) {
@@ -102,7 +104,9 @@ struct CTaskRunner {
             delete argv;
         }
         if (pipeline.m_wait) {
-            while (-1 != wait(NULL)) {}
+            for (int i = 0; i < childs.size(); ++i) {
+                waitpid(childs[i], NULL, 0);
+            }
         }
     }
 };

@@ -125,7 +125,7 @@ public:
                         CheckTok(tok, EString);
                         exec->m_params.push_back( static_cast<CTokString*>(tok)->m_data );
                     } else {
-                        throw std::string("expected variable value");
+                        exec->m_params.push_back("");
                     }
                     m_state = EWasSpecialCmd;
                     res.m_special = true;
